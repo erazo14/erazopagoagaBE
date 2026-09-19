@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "engines": {
-    "node": "18 || 20"
+    "node": "24.x"
   },
   "scripts": {
     "build": "lb-tsc",
@@ -51,15 +51,16 @@
     "@loopback/rest": "^14.0.1",
     "@loopback/rest-explorer": "^7.0.1",
     "@loopback/service-proxy": "^7.0.1",
-    "tslib": "^2.0.0"
+    "tslib": "^2.0.0",
+    "vercel": "^59.23.2"
   },
   "devDependencies": {
     "@loopback/build": "^11.0.1",
-    "source-map-support": "^0.5.21",
+    "@loopback/eslint-config": "^15.0.1",
     "@loopback/testlab": "^7.0.1",
     "@types/node": "^16.18.95",
-    "@loopback/eslint-config": "^15.0.1",
     "eslint": "^8.57.0",
+    "source-map-support": "^0.5.21",
     "typescript": "~5.2.2"
   }
 }
