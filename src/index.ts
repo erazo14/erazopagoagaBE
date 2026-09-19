@@ -2,14 +2,32 @@ import {ApplicationConfig, ErazopagoagabeApplication} from './application';
 
 export * from './application';
 
-export async function main(options: ApplicationConfig = {}) {
+// export async function main(options: ApplicationConfig = {}) {
+//   const app = new ErazopagoagabeApplication(options);
+//   await app.boot();
+//   await app.start();
+
+//   const url = app.restServer.url;
+//   console.log(`Server is running at ${url}`);
+//   console.log(`Try ${url}/ping`);
+
+//   return app;
+// }
+
+export async function main(
+  options: ApplicationConfig = {},
+  startServer = true,
+) {
   const app = new ErazopagoagabeApplication(options);
   await app.boot();
-  await app.start();
 
-  const url = app.restServer.url;
-  console.log(`Server is running at ${url}`);
-  console.log(`Try ${url}/ping`);
+  if (startServer) {
+    await app.start();
+
+    const url = app.restServer.url;
+    console.log(`Server is running at ${url}`);
+    console.log(`Try ${url}/ping`);
+  }
 
   return app;
 }
