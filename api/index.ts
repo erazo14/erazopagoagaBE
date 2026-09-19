@@ -1,8 +1,8 @@
-const {main} = require('../dist');
+import {main} from '../dist/index.js';
 
-let appPromise;
+let appPromise: ReturnType<typeof main> | undefined;
 
-module.exports = async function handler(req, res) {
+export default async function handler(req: any, res: any) {
   if (!appPromise) {
     appPromise = main(
       {
@@ -21,4 +21,4 @@ module.exports = async function handler(req, res) {
   const app = await appPromise;
 
   return app.restServer.requestHandler(req, res);
-};
+}
