@@ -27,6 +27,11 @@ export class ErazopagoagabeApplication extends BootMixin(
     // Customize @loopback/rest-explorer configuration here
     this.configure(RestExplorerBindings.COMPONENT).to({
       path: '/explorer',
+      indexTemplatePath: path.join(
+        __dirname,
+        'rest-explorer-templates',
+        'index.html.ejs',
+      ),
     });
     this.component(RestExplorerComponent);
 
