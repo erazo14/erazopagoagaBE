@@ -20,5 +20,17 @@ export default async function handler(req: any, res: any) {
 
   const app = await appPromise;
 
+  const rawPath = req.query?.['...path'];
+
+  let cleanPath = '/';
+
+  if (Array.isArray(rawPath)) {
+    cleanPath = '/' + rawPath.join('/');
+  } else if (typeof rawPath === 'string') {
+    cleanPath = '/' + rawPath;
+  }
+
+  req.url = cleanPath;
+
   return app.restServer.requestHandler(req, res);
 }

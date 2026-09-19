@@ -1,10 +1,15 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
-  "routes": [
+  "functions": {
+    "api/[...path].ts": {
+      "includeFiles": "dist/**"
+    }
+  },
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/api/index.ts"
+      "source": "/:path*",
+      "destination": "/api/:path*"
     }
   ]
 }
