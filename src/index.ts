@@ -1,57 +1,47 @@
-import {ApplicationConfig, ErazopagoagabeApplication} from './application';
+import cors from '@fastify/cors';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import Fastify from 'fastify';
 
-export * from './application';
+const app = Fastify({
+  logger: true,
+});
 
-// export async function main(options: ApplicationConfig = {}) {
-//   const app = new ErazopagoagabeApplication(options);
-//   await app.boot();
-//   await app.start();
+async function start() {
+  await app.register(cors, {
+    origin: true,
+  });
 
-//   const url = app.restServer.url;
-//   console.log(`Server is running at ${url}`);
-//   console.log(`Try ${url}/ping`);
-
-//   return app;
-// }
-
-export async function main(
-  options: ApplicationConfig = {},
-  startServer = true,
-) {
-  const app = new ErazopagoagabeApplication(options);
-  await app.boot();
-
-  if (startServer) {
-    await app.start();
-
-    const url = app.restServer.url;
-    console.log(`Server is running at ${url}`);
-    console.log(`Try ${url}/ping`);
-  }
-
-  return app;
-}
-
-if (require.main === module) {
-  // Run the application
-  const config = {
-    rest: {
-      port: +(process.env.PORT ?? 3000),
-      host: process.env.HOST,
-      // The `gracePeriodForClose` provides a graceful close for http/https
-      // servers with keep-alive clients. The default value is `Infinity`
-      // (don't force-close). If you want to immediately destroy all sockets
-      // upon stop, set its value to `0`.
-      // See https://www.npmjs.com/package/stoppable
-      gracePeriodForClose: 5000, // 5 seconds
-      openApiSpec: {
-        // useful when used with OpenAPI-to-GraphQL to locate your application
-        setServersFromRequest: true,
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Erazo Pagoaga API',
+        description: 'Wedding API',
+        version: '1.0.0',
       },
     },
-  };
-  main(config).catch(err => {
-    console.error('Cannot start the application.', err);
-    process.exit(1);
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
+
+  app.get('/ping', async () => {
+    return {
+      message: 'pong',
+    };
+  });
+
+  const port = Number(process.env.PORT) || 3000;
+  const host = process.env.HOST || '0.0.0.0';
+
+  await app.listen({
+    port,
+    host,
   });
 }
+
+start().catch((error) => {
+  app.log.error(error);
+  process.exit(1);
+});
