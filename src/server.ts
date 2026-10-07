@@ -2,13 +2,14 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import type {IncomingMessage, ServerResponse} from 'node:http';
 import {connectMongoDB} from './db/mongodb';
 
 const app = Fastify({
   logger: true,
 });
 
-async function start() {
+async function configureApp() {
   await app.register(cors, {
     origin: true,
   });
@@ -48,6 +49,27 @@ async function start() {
     };
   });
 
+  await app.ready();
+}
+
+let appReady: Promise<void> | undefined;
+
+function prepareApp(): Promise<void> {
+  appReady ??= configureApp();
+  return appReady;
+}
+
+export default async function handler(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  await prepareApp();
+  app.server.emit('request', request, response);
+}
+
+async function start() {
+  await prepareApp();
+
   const port = Number(process.env.PORT) || 3000;
   const host = process.env.HOST || '0.0.0.0';
 
@@ -57,7 +79,9 @@ async function start() {
   });
 }
 
-start().catch((error) => {
-  app.log.error(error);
-  process.exit(1);
-});
+if (process.env.VERCEL !== '1') {
+  start().catch((error) => {
+    app.log.error(error);
+    process.exit(1);
+  });
+}
