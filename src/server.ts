@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import {connectMongoDB} from './db/mongodb';
 
 const app = Fastify({
   logger: true,
@@ -26,9 +27,24 @@ async function start() {
     routePrefix: '/docs',
   });
 
+  await connectMongoDB();
+
   app.get('/ping', async () => {
     return {
       message: 'pong',
+    };
+  });
+
+  app.get('/db-test', async () => {
+    const db = await connectMongoDB();
+
+    const result = await db.command({
+      ping: 1,
+    });
+
+    return {
+      message: 'MongoDB connected',
+      ok: result.ok === 1,
     };
   });
 
