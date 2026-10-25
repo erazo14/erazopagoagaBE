@@ -4,6 +4,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {connectMongoDB} from './db/mongodb';
+import guestRoutes from './routes/guests';
 
 const app = Fastify({
   logger: true,
@@ -29,6 +30,9 @@ async function configureApp() {
   });
 
   await connectMongoDB();
+  await app.register(guestRoutes, {
+    prefix: '/api',
+  });
 
   app.get('/ping', async () => {
     return {

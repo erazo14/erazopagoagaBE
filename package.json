@@ -11,7 +11,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/guests.test.ts"
   },
   "author": "Ricardo Erazo <ricardo.erazo@saphyte.com>",
   "license": "MIT",
