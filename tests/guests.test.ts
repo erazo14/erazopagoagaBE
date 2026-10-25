@@ -3,13 +3,25 @@ import test from 'node:test';
 import {parseCreateGroup, parseRSVP} from '../src/routes/guest-validation';
 
 const validGroup = {
-  principal: {name: 'Ana', drinksAlcohol: false, location: 'Tegucigalpa'},
-  companions: [{name: 'Luis', drinksAlcohol: true}],
-  invitedBy: 'novia',
-  category: 'amigos',
-  invitationType: 'pareja',
-  maxGuests: 2,
-  contact: {countryPrefix: '+504', phoneNumber: '9999-1234'},
+  principal: {
+    invitado2: 'Invitado principal',
+    ubicacion: 'Honduras',
+    bebida: 'Si',
+    prefijo: 'Sr.',
+  },
+  companions: [
+    {
+      invitado2: 'Acompañante',
+      ubicacion: 'Honduras',
+      bebida: 'No',
+      prefijo: 'Srta.',
+    },
+  ],
+  novio: 'Fernando',
+  categoria: 'Amigos',
+  tipo: 'Pareja',
+  invitados: 2,
+  contacto: '+50400000000',
 };
 
 test('accepts a group whose listed guests fit the invitation limit', () => {
@@ -17,12 +29,16 @@ test('accepts a group whose listed guests fit the invitation limit', () => {
   assert.ok(parsed);
   assert.equal(parsed.companions.length, 1);
   assert.equal(parsed.maxGuests, 2);
-  assert.equal(parsed.principal.drinksAlcohol, false);
+  assert.equal(parsed.principal.drinksAlcohol, true);
+  assert.equal(parsed.principal.salutation, 'Sr.');
+  assert.equal(parsed.host, 'Fernando');
+  assert.equal(parsed.category, 'Amigos');
+  assert.equal(parsed.contact, '+50400000000');
 });
 
 test('rejects a couple invitation with a limit other than two', () => {
   assert.equal(
-    parseCreateGroup({...validGroup, maxGuests: 3, companions: []}),
+    parseCreateGroup({...validGroup, invitados: 3, companions: []}),
     null,
   );
 });
@@ -31,7 +47,7 @@ test('rejects more listed guests than the invitation allows', () => {
   assert.equal(
     parseCreateGroup({
       ...validGroup,
-      companions: [{name: 'Luis'}, {name: 'Marta'}],
+      companions: [{invitado2: 'Acompañante 1'}, {invitado2: 'Acompañante 2'}],
     }),
     null,
   );
@@ -41,11 +57,12 @@ test('accepts an individual invitation with exactly one seat', () => {
   const parsed = parseCreateGroup({
     ...validGroup,
     companions: [],
-    invitationType: 'individual',
-    maxGuests: 1,
+    tipo: 'Individual',
+    invitados: 1,
   });
   assert.ok(parsed);
   assert.equal(parsed.maxGuests, 1);
+  assert.equal(parsed.invitationType, 'Individual');
 });
 
 test('accepts an attending response with the principal included in guestCount', () => {

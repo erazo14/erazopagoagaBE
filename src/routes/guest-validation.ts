@@ -1,86 +1,177 @@
 export const GUEST_CATEGORIES = [
-  'amigos',
-  'amigos_papas_novia',
-  'amigos_papas_novio',
-  'familia',
-  'trabajo',
+  'Amigos',
+  'Amigos papás novia',
+  'Amigos papás novio',
+  'Familia',
+  'Trabajo',
 ] as const;
 
 export const INVITATION_TYPES = [
-  'acompanante',
-  'familia',
-  'individual',
-  'pareja',
+  'Acompañante',
+  'Familia',
+  'Individual',
+  'Pareja',
 ] as const;
-
-export const INVITED_BY = ['novia', 'novio'] as const;
 
 export type GuestCategory = (typeof GUEST_CATEGORIES)[number];
 export type InvitationType = (typeof INVITATION_TYPES)[number];
-export type InvitedBy = (typeof INVITED_BY)[number];
 export type RSVPStatus = 'attending' | 'declined';
 
 export interface GuestInput {
   name: string;
   location?: string;
   drinksAlcohol: boolean;
+  salutation?: string;
 }
 
 export interface CreateGuestGroupInput {
   principal: GuestInput;
   companions: GuestInput[];
-  invitedBy: InvitedBy;
+  host: string;
   category: GuestCategory;
   invitationType: InvitationType;
   maxGuests: number;
-  contact: {
-    countryPrefix: string;
-    phoneNumber: string;
-  };
+  contact: string;
 }
 
 export interface RSVPBody {
   status: RSVPStatus;
   guestCount: number;
-  attendeeNames?: string[];
+  attendeeNames: string[];
   note?: string;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const isOneOf = <T extends readonly string[]>(
-  values: T,
-  value: unknown,
-): value is T[number] => typeof value === 'string' && values.includes(value);
+const normalizeText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const categoryLookup = new Map<string, GuestCategory>([
+  ['amigos', 'Amigos'],
+  ['amigos papas novia', 'Amigos papás novia'],
+  ['amigos papas novio', 'Amigos papás novio'],
+  ['familia', 'Familia'],
+  ['trabajo', 'Trabajo'],
+]);
+
+const invitationTypeLookup = new Map<string, InvitationType>([
+  ['acompanante', 'Acompañante'],
+  ['familia', 'Familia'],
+  ['individual', 'Individual'],
+  ['pareja', 'Pareja'],
+]);
+
+export function normalizeCategory(value: unknown): GuestCategory | null {
+  return typeof value === 'string'
+    ? (categoryLookup.get(normalizeText(value)) ?? null)
+    : null;
+}
+
+export function normalizeInvitationType(value: unknown): InvitationType | null {
+  return typeof value === 'string'
+    ? (invitationTypeLookup.get(normalizeText(value)) ?? null)
+    : null;
+}
+
+function parseDrinksAlcohol(value: unknown): boolean | null {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = normalizeText(value);
+  if (['si', 'yes', 'true', '1'].includes(normalized)) {
+    return true;
+  }
+  if (['no', 'false', '0'].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
+function firstPresent(
+  record: Record<string, unknown>,
+  keys: string[],
+): unknown {
+  for (const key of keys) {
+    if (record[key] !== undefined) {
+      return record[key];
+    }
+  }
+  return undefined;
+}
 
 export function parseGuest(value: unknown): GuestInput | null {
-  if (!isRecord(value) || typeof value.name !== 'string') {
+  if (!isRecord(value)) {
     return null;
   }
 
-  const name = value.name.trim();
-  if (name.length < 1 || name.length > 120) {
+  const rawName = firstPresent(value, ['name', 'invitado2']);
+  if (typeof rawName !== 'string' || !rawName.trim() || rawName.trim().length > 120) {
     return null;
   }
 
-  let location: string | undefined;
-  if (value.location !== undefined) {
-    if (typeof value.location !== 'string' || value.location.trim().length > 120) {
-      return null;
-    }
-    location = value.location.trim() || undefined;
+  const rawLocation = firstPresent(value, ['location', 'ubicacion']);
+  if (
+    rawLocation !== undefined &&
+    (typeof rawLocation !== 'string' || rawLocation.trim().length > 120)
+  ) {
+    return null;
   }
 
-  if (value.drinksAlcohol !== undefined && typeof value.drinksAlcohol !== 'boolean') {
+  const rawDrinks = firstPresent(value, ['drinksAlcohol', 'bebida']);
+  const drinksAlcohol = rawDrinks === undefined ? false : parseDrinksAlcohol(rawDrinks);
+  if (drinksAlcohol === null) {
+    return null;
+  }
+
+  const rawSalutation = firstPresent(value, ['salutation', 'prefijo']);
+  if (
+    rawSalutation !== undefined &&
+    (typeof rawSalutation !== 'string' || rawSalutation.trim().length > 30)
+  ) {
     return null;
   }
 
   return {
-    name,
-    ...(location ? {location} : {}),
-    drinksAlcohol: value.drinksAlcohol === true,
+    name: rawName.trim(),
+    ...(typeof rawLocation === 'string' && rawLocation.trim()
+      ? {location: rawLocation.trim()}
+      : {}),
+    drinksAlcohol,
+    ...(typeof rawSalutation === 'string' && rawSalutation.trim()
+      ? {salutation: rawSalutation.trim()}
+      : {}),
   };
+}
+
+function parseContact(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value.trim().length <= 40 ? value.trim() : null;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const phoneNumber = value.phoneNumber;
+  const countryPrefix = value.countryPrefix;
+  if (
+    typeof phoneNumber !== 'string' ||
+    (countryPrefix !== undefined && typeof countryPrefix !== 'string')
+  ) {
+    return null;
+  }
+  const contact = `${typeof countryPrefix === 'string' ? countryPrefix.trim() : ''}${phoneNumber.trim()}`;
+  return contact.length <= 40 ? contact : null;
 }
 
 export function parseCreateGroup(value: unknown): CreateGuestGroupInput | null {
@@ -99,38 +190,33 @@ export function parseCreateGroup(value: unknown): CreateGuestGroupInput | null {
     return null;
   }
 
+  const hostValue = firstPresent(value, ['host', 'novio', 'invitedBy']);
+  const category = normalizeCategory(firstPresent(value, ['category', 'categoria']));
+  const invitationType = normalizeInvitationType(
+    firstPresent(value, ['invitationType', 'tipo']),
+  );
+  const maxGuests = firstPresent(value, ['maxGuests', 'invitados']);
+  const contact = parseContact(firstPresent(value, ['contact', 'contacto']));
+
   if (
-    !isOneOf(INVITED_BY, value.invitedBy) ||
-    !isOneOf(GUEST_CATEGORIES, value.category) ||
-    !isOneOf(INVITATION_TYPES, value.invitationType) ||
-    !Number.isInteger(value.maxGuests) ||
-    (value.maxGuests as number) < 1 ||
-    (value.maxGuests as number) > 20 ||
-    !isRecord(value.contact)
+    typeof hostValue !== 'string' ||
+    hostValue.trim().length < 1 ||
+    hostValue.trim().length > 120 ||
+    !category ||
+    !invitationType ||
+    !Number.isInteger(maxGuests) ||
+    (maxGuests as number) < 1 ||
+    (maxGuests as number) > 20 ||
+    contact === null
   ) {
     return null;
   }
 
-  const countryPrefix = value.contact.countryPrefix;
-  const phoneNumber = value.contact.phoneNumber;
+  const limit = maxGuests as number;
   if (
-    typeof countryPrefix !== 'string' ||
-    !/^\+\d{1,4}$/.test(countryPrefix.trim()) ||
-    typeof phoneNumber !== 'string' ||
-    !/^[\d\s()-]{5,24}$/.test(phoneNumber.trim()) ||
-    phoneNumber.replace(/\D/g, '').length < 5 ||
-    phoneNumber.replace(/\D/g, '').length > 15
-  ) {
-    return null;
-  }
-
-  const maxGuests = value.maxGuests as number;
-  const invitationType = value.invitationType;
-  if (
-    (invitationType === 'individual' && maxGuests !== 1) ||
-    ((invitationType === 'acompanante' || invitationType === 'pareja') &&
-      maxGuests !== 2) ||
-    companions.length + 1 > maxGuests
+    (invitationType === 'Individual' && limit !== 1) ||
+    ((invitationType === 'Acompañante' || invitationType === 'Pareja') && limit !== 2) ||
+    companions.length + 1 > limit
   ) {
     return null;
   }
@@ -138,14 +224,11 @@ export function parseCreateGroup(value: unknown): CreateGuestGroupInput | null {
   return {
     principal,
     companions: companions as GuestInput[],
-    invitedBy: value.invitedBy,
-    category: value.category,
+    host: hostValue.trim(),
+    category,
     invitationType,
-    maxGuests,
-    contact: {
-      countryPrefix: countryPrefix.trim(),
-      phoneNumber: phoneNumber.trim(),
-    },
+    maxGuests: limit,
+    contact,
   };
 }
 
@@ -164,7 +247,10 @@ export function parseRSVP(value: unknown): RSVPBody | null {
     attendeeNames !== undefined &&
     (!Array.isArray(attendeeNames) ||
       attendeeNames.some(
-        (name) => typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 120,
+        (name) =>
+          typeof name !== 'string' ||
+          name.trim().length < 1 ||
+          name.trim().length > 120,
       ))
   ) {
     return null;
@@ -178,10 +264,13 @@ export function parseRSVP(value: unknown): RSVPBody | null {
   }
 
   const guestCount = value.guestCount as number;
+  const names = Array.isArray(attendeeNames)
+    ? attendeeNames.map((name) => (name as string).trim())
+    : [];
   if (
     (value.status === 'declined' && guestCount !== 0) ||
     (value.status === 'attending' && guestCount < 1) ||
-    (Array.isArray(attendeeNames) && attendeeNames.length !== guestCount)
+    (Array.isArray(attendeeNames) && names.length !== guestCount)
   ) {
     return null;
   }
@@ -189,11 +278,16 @@ export function parseRSVP(value: unknown): RSVPBody | null {
   return {
     status: value.status,
     guestCount,
-    ...(Array.isArray(attendeeNames)
-      ? {attendeeNames: attendeeNames.map((name) => (name as string).trim())}
-      : {attendeeNames: []}),
+    attendeeNames: names,
     ...(typeof value.note === 'string' && value.note.trim()
       ? {note: value.note.trim()}
       : {}),
   };
+}
+
+export function isYes(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    ['si', 'yes', 'true', '1'].includes(normalizeText(value))
+  );
 }

@@ -18,7 +18,7 @@ export async function connectMongoDB(): Promise<Db> {
 
   await client.connect();
 
-  db = client.db();
+  db = client.db(env.MONGODB_DB_NAME);
 
   return db;
 }

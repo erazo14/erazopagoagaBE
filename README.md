@@ -1,30 +1,41 @@
 # Erazo Pagoaga Wedding API
 
-Fastify API for managing invitation groups and their RSVP responses.
+Fastify API for wedding guests and RSVP responses. It uses the existing `Wedding.guests` collection for guest rows and a separate `rsvp_responses` collection for responses.
 
 ## Configuration
 
-Set these environment variables before starting the server:
-
-- `MONGODB_URI` — MongoDB connection URI.
-- `ADMIN_API_KEY` — required to use guest-management and RSVP administration routes. Admin routes return `503` when this is not configured.
+- `MONGODB_URI` — MongoDB connection URI; store it as a secret in the backend deployment environment.
+- `MONGODB_DB_NAME` — database name; defaults to `Wedding`.
+- `ADMIN_API_KEY` — protects guest and RSVP administration endpoints. Admin routes return `503` if this is not configured.
 - `PORT` — optional server port; defaults to `3000`.
 - `HOST` — optional bind address; defaults to `0.0.0.0`.
 
-The API creates the `guest_groups`, `guests`, and `rsvp_responses` collections and their indexes when it starts. It does not modify other collections.
+The API adds indexes to `Wedding.guests` and creates an index for `rsvp_responses`. It does not rewrite or delete existing guest records.
 
-## Guest and invitation model
+## Existing guest structure
 
-- A guest group represents one invitation and has a MongoDB `_id`.
-- Each guest record has its own MongoDB `_id` and a `groupId` reference to the invitation group.
-- Exactly one guest is the principal recipient. The group stores the WhatsApp contact's `countryPrefix` and `phoneNumber`.
-- The group receives an opaque `guestId` token. Use the returned token in the frontend invitation URL and fetch its public details from `GET /api/invites/:guestId`.
-- `maxGuests` is the maximum number of people who may attend, including the principal. An RSVP cannot change this limit.
-- `drinksAlcohol` is a boolean on each guest.
-- Categories: `amigos`, `amigos_papas_novia`, `amigos_papas_novio`, `familia`, `trabajo`.
-- `invitedBy`: `novia` or `novio`.
-- Invitation types: `individual` (one seat), `acompanante` (two seats), `pareja` (two seats), or `familia` (one to twenty seats).
-- Archived groups and guests are retained instead of physically deleted.
+Every document in `guests` represents one guest. MongoDB's `_id` identifies that guest, while `id` is the shared invitation/group relation.
+
+| Field | Meaning |
+| --- | --- |
+| `_id` | MongoDB ID of this guest row |
+| `id` | Shared relation ID for all guests in one invitation |
+| `invitado2` | Guest's name |
+| `ubicacion` | Where the guest lives |
+| `novio` | Host who invited the group, such as `Fernando` |
+| `categoria` | `Amigos`, `Amigos papás novia`, `Amigos papás novio`, `Familia`, or `Trabajo` |
+| `bebida` | `Si` or `No`; stored per guest |
+| `contacto` | Phone/contact for the principal guest |
+| `principal` | `Si` for the recipient of the invitation, otherwise `No` |
+| `prefijo` | Personal title such as `Sr.`, `Srta.`, or `Sra.` |
+| `invitados` | Maximum invited count, stored only on the principal row and including the principal |
+| `tipo` | `Acompañante`, `Familia`, `Individual`, or `Pareja` |
+| `guestId` | Opaque invitation token, added to the principal row for public links |
+| `active` | Optional archive flag; existing rows without this field are treated as active |
+
+Existing numeric group IDs remain supported. Newly created groups use a generated string relation ID. The principal's `invitados` value is the RSVP limit; the response count is stored separately and cannot increase that limit.
+
+The API recognizes `Sr.`/`Srta.`/`Sra.` as `prefijo` (a personal title), and treats `contacto` as one phone/contact string. It does not assume that `prefijo` is a telephone country code.
 
 ## Routes
 
@@ -32,15 +43,16 @@ Admin routes require the `x-admin-api-key` header.
 
 | Method | Route | Access | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/api/guest-groups` | Admin | Create an invitation group and its principal/companions |
+| `POST` | `/api/guest-groups` | Admin | Create a group and its principal/companions in `guests` |
 | `GET` | `/api/guest-groups` | Admin | List active groups, guests, and RSVP status |
-| `GET` | `/api/guest-groups/:id` | Admin | Get a group by MongoDB id |
-| `PATCH` | `/api/guest-groups/:id` | Admin | Update host, category, type, limit, or contact |
-| `DELETE` | `/api/guest-groups/:id` | Admin | Archive a group |
-| `POST` | `/api/guest-groups/:id/guests` | Admin | Add a guest to a group |
-| `PATCH` | `/api/guest-groups/:id/guests/:guestId` | Admin | Update a guest's name, location, or alcohol preference |
-| `PUT` | `/api/guest-groups/:id/principal` | Admin | Change the principal recipient and WhatsApp contact |
+| `GET` | `/api/guest-groups/:id` | Admin | Get a group by its shared relation ID |
+| `PATCH` | `/api/guest-groups/:id` | Admin | Update host, category, type, guest limit, or contact |
+| `DELETE` | `/api/guest-groups/:id` | Admin | Archive all guest rows in a group |
+| `POST` | `/api/guest-groups/:id/guests` | Admin | Add a guest within the invitation limit |
+| `PATCH` | `/api/guest-groups/:id/guests/:guestId` | Admin | Update a guest's name, location, alcohol preference, or title |
+| `PUT` | `/api/guest-groups/:id/principal` | Admin | Change the principal and its WhatsApp contact |
 | `DELETE` | `/api/guest-groups/:id/guests/:guestId` | Admin | Archive a non-principal guest |
+| `POST` | `/api/guest-groups/:id/invite-link` | Admin | Get or generate the group's invitation token |
 | `GET` | `/api/invites/:guestId` | Public | Get safe invitation details and the current RSVP |
 | `POST` | `/api/rsvps/:guestId` | Public | Submit or update the group's RSVP |
 | `GET` | `/api/rsvps` | Admin | List submitted RSVP responses |
@@ -50,28 +62,28 @@ Admin routes require the `x-admin-api-key` header.
 ```json
 {
   "principal": {
-    "name": "Ana Pérez",
-    "location": "Tegucigalpa",
-    "drinksAlcohol": false
+    "invitado2": "Invitado principal",
+    "ubicacion": "Honduras",
+    "bebida": "Si",
+    "prefijo": "Sr."
   },
   "companions": [
     {
-      "name": "Luis Gómez",
-      "drinksAlcohol": true
+      "invitado2": "Acompañante",
+      "ubicacion": "Honduras",
+      "bebida": "No",
+      "prefijo": "Srta."
     }
   ],
-  "invitedBy": "novia",
-  "category": "amigos",
-  "invitationType": "pareja",
-  "maxGuests": 2,
-  "contact": {
-    "countryPrefix": "+504",
-    "phoneNumber": "9999-1234"
-  }
+  "novio": "Fernando",
+  "categoria": "Amigos",
+  "tipo": "Pareja",
+  "invitados": 2,
+  "contacto": "+50400000000"
 }
 ```
 
-The creation response includes the generated `guestId` and `inviteApiPath`. The frontend can include that token in the guest-facing invitation URL.
+The response contains `guestId` and `inviteApiPath`. The frontend can place the token in the guest-facing invitation URL and use the public API path to load its details.
 
 ### Submit RSVP example
 
@@ -79,7 +91,7 @@ The creation response includes the generated `guestId` and `inviteApiPath`. The 
 {
   "status": "attending",
   "guestCount": 2,
-  "attendeeNames": ["Ana Pérez", "Luis Gómez"],
+  "attendeeNames": ["Invitado principal", "Acompañante"],
   "note": "Gracias por la invitación"
 }
 ```
@@ -91,9 +103,6 @@ Use `status: "declined"` and `guestCount: 0` when the group cannot attend. `atte
 ```sh
 npm ci
 npm run dev
-```
-
-```sh
 npm run typecheck
 npm test
 npm run build
