@@ -138,7 +138,10 @@ async function ensureIndexes(db: Db): Promise<void> {
   ]);
 }
 
-function adminGuard(request: FastifyRequest, reply: FastifyReply): void {
+async function adminGuard(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
   const expected = env.ADMIN_API_KEY;
   if (!expected) {
     reply.code(503).send({error: 'Admin API is not configured'});
