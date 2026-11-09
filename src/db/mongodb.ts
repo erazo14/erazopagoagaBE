@@ -7,7 +7,11 @@ if (!uri) {
   throw new Error('MONGODB_URI is not configured');
 }
 
-const client = new MongoClient(uri);
+const client = new MongoClient(uri, {
+  connectTimeoutMS: 10_000,
+  serverSelectionTimeoutMS: 10_000,
+  socketTimeoutMS: 20_000,
+});
 
 let db: Db | null = null;
 

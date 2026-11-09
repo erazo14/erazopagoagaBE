@@ -264,6 +264,7 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
   app.post('/guest-groups', {preHandler: adminGuard}, async (request, reply) => {
     const input = parseCreateGroup(request.body);
     if (!input) {
+      app.log.warn('Rejected invalid guest group payload');
       return reply.code(400).send({error: 'Invalid guest group. Check the guest and invitation fields.'});
     }
 
@@ -294,14 +295,21 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
       ...input.companions.map((guest) => toDocument(guest, false)),
     ];
 
+    app.log.info(
+      {groupId, guestCount: documents.length},
+      'Inserting guest group into MongoDB',
+    );
     try {
       await guestCollection(db).insertMany(documents);
     } catch (error) {
+      app.log.error({err: error, groupId}, 'Guest group insert failed; attempting cleanup');
       await guestCollection(db).deleteMany({id: groupId});
       throw error;
     }
 
+    app.log.info({groupId}, 'Guest records inserted; loading group response');
     const group = await getAdminGroup(db, groupId);
+    app.log.info({groupId}, 'Guest group response loaded');
     return reply.code(201).send({
       ...group,
       inviteApiPath: `/api/invites/${guestId}`,
@@ -309,10 +317,12 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/guest-groups', {preHandler: adminGuard}, async (_request, reply) => {
+    app.log.info('Loading guest rows for admin list');
     const allGuests: StoredGuest[] = await guestCollection(db)
       .find({active: {$ne: false}, id: {$exists: true}})
       .sort({id: 1, _id: 1})
       .toArray();
+    app.log.info({guestCount: allGuests.length}, 'Guest rows loaded; grouping invitations');
     const groups = new Map<string, {id: GroupKey; guests: StoredGuest[]}>();
     for (const guest of allGuests) {
       const key = groupCacheKey(guest.id);
@@ -326,6 +336,7 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
         getAdminGroup(db, group.id, group.guests),
       ),
     );
+    app.log.info({groupCount: result.length}, 'Admin guest groups loaded');
     return reply.send(result);
   });
 
@@ -429,7 +440,15 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
     '/guest-groups/:id',
     {preHandler: adminGuard},
     async (request, reply) => {
+      app.log.info(
+        {groupId: request.params.id},
+        'Looking up guest group for invitation link',
+      );
       const rows = await findGroupRows(db, request.params.id);
+      app.log.info(
+        {groupId: request.params.id, guestCount: rows.length},
+        'Invitation link group lookup complete',
+      );
       if (!rows.length) {
         return reply.code(404).send({error: 'Active guest group not found'});
       }
@@ -657,9 +676,17 @@ const guestRoutes: FastifyPluginAsync = async (app) => {
       }
       const guestId = principal.guestId ?? randomBytes(32).toString('base64url');
       if (!principal.guestId) {
+        app.log.info(
+          {groupId: request.params.id},
+          'Saving invitation token for guest group',
+        );
         await guestCollection(db).updateOne(
           {_id: principal._id},
           {$set: {guestId, updatedAt: new Date()}},
+        );
+        app.log.info(
+          {groupId: request.params.id},
+          'Invitation token saved for guest group',
         );
       }
       return reply.send({
